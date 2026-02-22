@@ -8,6 +8,25 @@ function tokenize(q) {
   return q.toLowerCase().trim().split(/\s+/).filter(Boolean);
 }
 
+function highlight(text, token) {
+  if (!text) return null;
+  if (!token) return text;
+  const lower = String(text).toLowerCase();
+  const t = String(token).toLowerCase();
+  const idx = lower.indexOf(t);
+  if (idx === -1) return text;
+  const before = text.slice(0, idx);
+  const match = text.slice(idx, idx + t.length);
+  const after = text.slice(idx + t.length);
+  return (
+    <>
+      {before}
+      <mark>{match}</mark>
+      {after}
+    </>
+  );
+}
+
 // Leaflet marker icon fix (Vite/ESM)
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -50,6 +69,7 @@ export default function App() {
   const [data, setData] = useState([]);
   const [index, setIndex] = useState(null);
   const [query, setQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedId, setSelectedId] = useState(null);
   const mapRef = useRef(null);
 
@@ -65,10 +85,52 @@ export default function App() {
     })();
   }, []);
 
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearchQuery(query);
+    }, 200);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get("q");
+    if (q) {
+      setQuery(q);
+      setSearchQuery(q);
+    }
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (searchQuery) {
+      params.set("q", searchQuery);
+    } else {
+      params.delete("q");
+    }
+    const newUrl = params.toString()
+      ? `${window.location.pathname}?${params}`
+      : window.location.pathname;
+    window.history.replaceState(null, "", newUrl);
+  }, [searchQuery]);
+
+  const searchToken = useMemo(
+    () => (tokenize(searchQuery)[0] ?? ""),
+    [searchQuery]
+  );
+
+  const flyToRecord = (record) => {
+    if (!record) return;
+    setSelectedId(record.id);
+    const lat = record.location?.lat ?? null;
+    const lon = record.location?.lon ?? null;
+    if (lat != null && lon != null) mapRef.current?.flyTo([lat, lon], 10);
+  };
+
   const results = useMemo(() => {
     if (!index) return [];
 
-    const tokens = tokenize(query);
+    const tokens = tokenize(searchQuery);
     if (tokens.length === 0) return data;
 
     const sets = tokens.map((t) => new Set(index.search(t)));
@@ -76,7 +138,7 @@ export default function App() {
       (a, b) => new Set([...a].filter((x) => b.has(x)))
     );
     return [...intersection].map((i) => data[i]);
-  }, [query, index, data]);
+  }, [searchQuery, index, data]);
 
   const mapPoints = useMemo(() => {
     return results
@@ -112,6 +174,17 @@ export default function App() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setQuery("");
+                setSearchQuery("");
+                setSelectedId(null);
+              } else if (e.key === "Enter") {
+                if (results.length > 0) {
+                  flyToRecord(results[0]);
+                }
+              }
+            }}
             placeholder="例: japan C D"
             style={{ width: "100%", padding: 10, fontSize: 16 }}
           />
@@ -149,10 +222,12 @@ export default function App() {
               const lat = r.location?.lat ?? null;
               const lon = r.location?.lon ?? null;
 
-              const handleRowClick = () => {
-                setSelectedId(r.id);
-                if (lat != null && lon != null) mapRef.current?.flyTo([lat, lon], 10);
-              };
+              const handleRowClick = () => flyToRecord(r);
+
+              const tagsRaw = typeof r.tags === "string" ? r.tags : "";
+              const tagList = tagsRaw.split(/[,\s;]+/).filter(Boolean);
+              const shownTags = tagList.slice(0, 5);
+              const tagsOverflow = tagList.length > 5;
 
               const detailsUrl = r.links?.details ?? null;
               const sourceUrl = r.source_url || r.links?.web || "";
@@ -189,9 +264,9 @@ export default function App() {
                   }}
                 >
                   <div style={{ fontSize: 16 }}>
-                    <b>{site}</b>{" "}
+                    <b>{highlight(site, searchToken)}</b>{" "}
                     <span style={{ opacity: 0.85 }}>
-                      {country ? `(${country})` : ""} {source ? `/ ${source}` : ""}
+                      {country ? `(${country})` : ""} {source ? ` / ${source}` : ""}
                     </span>
                   </div>
 
@@ -204,6 +279,12 @@ export default function App() {
                   {infoParts.length > 0 && (
                     <div style={{ marginTop: 4, fontSize: 13, opacity: 0.8 }}>
                       {infoParts.join(" / ")}
+                    </div>
+                  )}
+
+                  {shownTags.length > 0 && (
+                    <div style={{ marginTop: 4, fontSize: 12, opacity: 0.8 }}>
+                      Tags: {shownTags.join(", ")}{tagsOverflow ? " …" : ""}
                     </div>
                   )}
 
