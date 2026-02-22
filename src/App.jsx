@@ -27,6 +27,19 @@ function highlight(text, token) {
   );
 }
 
+function normalizeBand(band) {
+  const s = String(band ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[- ]/g, "");
+  if (!s) return "";
+  if (s.startsWith("KU")) return "Ku";
+  if (s.startsWith("KA")) return "Ka";
+  const c = s[0];
+  if (["C", "X", "S", "L"].includes(c)) return c;
+  return "";
+}
+
 // Leaflet marker icon fix (Vite/ESM)
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -70,6 +83,7 @@ export default function App() {
   const [index, setIndex] = useState(null);
   const [query, setQuery] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedBands, setSelectedBands] = useState(new Set());
   const [selectedId, setSelectedId] = useState(null);
   const mapRef = useRef(null);
 
@@ -140,8 +154,13 @@ export default function App() {
     return [...intersection].map((i) => data[i]);
   }, [searchQuery, index, data]);
 
+  const filteredResults = useMemo(() => {
+    if (selectedBands.size === 0) return results;
+    return results.filter((r) => selectedBands.has(normalizeBand(r.band)));
+  }, [results, selectedBands]);
+
   const mapPoints = useMemo(() => {
-    return results
+    return filteredResults
       .map((r) => {
         const lat = r.location?.lat ?? null;
         const lon = r.location?.lon ?? null;
@@ -162,7 +181,9 @@ export default function App() {
         };
       })
       .filter(Boolean);
-  }, [results]);
+  }, [filteredResults]);
+
+  const BAND_OPTIONS = ["C", "X", "S", "L", "Ku", "Ka"];
 
   return (
     <div style={{ padding: 20, maxWidth: 1200, margin: "0 auto" }}>
@@ -180,8 +201,8 @@ export default function App() {
                 setSearchQuery("");
                 setSelectedId(null);
               } else if (e.key === "Enter") {
-                if (results.length > 0) {
-                  flyToRecord(results[0]);
+                if (filteredResults.length > 0) {
+                  flyToRecord(filteredResults[0]);
                 }
               }
             }}
@@ -189,10 +210,40 @@ export default function App() {
             style={{ width: "100%", padding: 10, fontSize: 16 }}
           />
 
-          <div style={{ marginTop: 10 }}>Hits: {results.length}</div>
+          <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 13, marginRight: 4 }}>Band:</span>
+            <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={selectedBands.size === 0}
+                onChange={() => setSelectedBands(new Set())}
+              />
+              <span>All</span>
+            </label>
+            {BAND_OPTIONS.map((b) => (
+              <label key={b} style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={selectedBands.has(b)}
+                  onChange={(e) => {
+                    setSelectedBands((prev) => {
+                      const next = new Set(prev);
+                      if (e.target.checked) next.add(b);
+                      else next.delete(b);
+                      return next;
+                    });
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <span>{b}</span>
+              </label>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 10 }}>Hits: {filteredResults.length}</div>
 
           <ul style={{ paddingLeft: 20 }}>
-            {results.map((r) => {
+            {filteredResults.map((r) => {
               const site = r.site_name ?? r.name ?? "(no name)";
 
               const country =
