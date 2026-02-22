@@ -1,0 +1,22 @@
+[
+  {
+    "country_iso3": "DEU",
+    "country_name": "Germany",
+    "site_name": "Hamburg",
+    "operator": "DWD",
+    "band": "C",
+    "polarization": "dual",
+    "source_url": "https://（WRDの該当ページURL）",
+    "last_verified": "2026-02-22"
+  },
+  {
+    "country_iso3": "GBR",
+    "country_name": "United Kingdom",
+    "site_name": "London",
+    "operator": "MetOffice",
+    "band": "C",
+    "polarization": "dual",
+    "source_url": "https://（WRDの該当ページURL）",
+    "last_verified": "2026-02-22"
+  }
+]

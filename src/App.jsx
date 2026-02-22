@@ -1,0 +1,272 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import FlexSearch from "flexsearch";
+import MarkerClusterGroup from "react-leaflet-cluster";
+import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import L from "leaflet";
+
+function tokenize(q) {
+  return q.toLowerCase().trim().split(/\s+/).filter(Boolean);
+}
+
+// Leaflet marker icon fix (Vite/ESM)
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: new URL(
+    "leaflet/dist/images/marker-icon-2x.png",
+    import.meta.url
+  ).toString(),
+  iconUrl: new URL(
+    "leaflet/dist/images/marker-icon.png",
+    import.meta.url
+  ).toString(),
+  shadowUrl: new URL(
+    "leaflet/dist/images/marker-shadow.png",
+    import.meta.url
+  ).toString(),
+});
+
+function FitBounds({ points }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!points || points.length === 0) return;
+    const bounds = L.latLngBounds(points.map((p) => [p.lat, p.lon]));
+    map.fitBounds(bounds, { padding: [20, 20] });
+  }, [map, points]);
+
+  return null;
+}
+
+function MapRefSetter({ mapRef }) {
+  const map = useMap();
+  useEffect(() => {
+    mapRef.current = map;
+    return () => { mapRef.current = null; };
+  }, [map, mapRef]);
+  return null;
+}
+
+export default function App() {
+  const [data, setData] = useState([]);
+  const [index, setIndex] = useState(null);
+  const [query, setQuery] = useState("");
+  const [selectedId, setSelectedId] = useState(null);
+  const mapRef = useRef(null);
+
+  useEffect(() => {
+    (async () => {
+      const res = await fetch("/radars_v2.json");
+      const records = await res.json();
+      setData(records);
+
+      const idx = new FlexSearch.Index({ tokenize: "forward" });
+      records.forEach((r, i) => idx.add(i, r.tags ?? ""));
+      setIndex(idx);
+    })();
+  }, []);
+
+  const results = useMemo(() => {
+    if (!index) return [];
+
+    const tokens = tokenize(query);
+    if (tokens.length === 0) return data;
+
+    const sets = tokens.map((t) => new Set(index.search(t)));
+    const intersection = sets.reduce(
+      (a, b) => new Set([...a].filter((x) => b.has(x)))
+    );
+    return [...intersection].map((i) => data[i]);
+  }, [query, index, data]);
+
+  const mapPoints = useMemo(() => {
+    return results
+      .map((r) => {
+        const lat = r.location?.lat ?? null;
+        const lon = r.location?.lon ?? null;
+        if (lat === null || lon === null) return null;
+
+        return {
+          id: r.id,
+          site: r.site_name ?? r.name ?? r.id,
+          country:
+            (r.country_iso3 && r.country_iso3 !== "" ? r.country_iso3 : null) ??
+            r.country_name ??
+            r.country?.alpha3 ??
+            r.country?.name ??
+            "",
+          band: r.band ?? "",
+          lat,
+          lon,
+        };
+      })
+      .filter(Boolean);
+  }, [results]);
+
+  return (
+    <div style={{ padding: 20, maxWidth: 1200, margin: "0 auto" }}>
+      <h2>Weather Radar Finder</h2>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 520px", gap: 16 }}>
+        {/* LEFT */}
+        <div>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="例: japan C D"
+            style={{ width: "100%", padding: 10, fontSize: 16 }}
+          />
+
+          <div style={{ marginTop: 10 }}>Hits: {results.length}</div>
+
+          <ul style={{ paddingLeft: 20 }}>
+            {results.map((r) => {
+              const site = r.site_name ?? r.name ?? "(no name)";
+
+              const country =
+                (r.country_iso3 && r.country_iso3 !== "" ? r.country_iso3 : null) ??
+                r.country_name ??
+                r.country?.alpha3 ??
+                r.country?.name ??
+                "";
+
+              const source = r.source_type ?? r.source ?? "";
+              const operator =
+                r.operator ?? r.org?.authorityName ?? r.org?.ownerName ?? "";
+
+              const band = r.band ?? "";
+              const pol = r.polarization ?? "";
+              const tx = r.txType ?? "";
+              const rx = r.rxType ?? "";
+              const status = r.status ?? "";
+
+              const install = r.installDate ?? "";
+              const elev =
+                r.location?.elevation_m !== null &&
+                r.location?.elevation_m !== undefined
+                  ? `${r.location.elevation_m} m`
+                  : "";
+
+              const lat = r.location?.lat ?? null;
+              const lon = r.location?.lon ?? null;
+
+              const handleRowClick = () => {
+                setSelectedId(r.id);
+                if (lat != null && lon != null) mapRef.current?.flyTo([lat, lon], 10);
+              };
+
+              const detailsUrl = r.links?.details ?? null;
+              const sourceUrl = r.source_url || r.links?.web || "";
+
+              const specParts = [
+                band ? `Band ${band}` : null,
+                pol ? `Pol ${pol}` : null,
+                tx ? `Tx ${tx}` : null,
+                rx ? `Rx ${rx}` : null,
+                status ? `Status ${status}` : null,
+              ].filter(Boolean);
+
+              const infoParts = [
+                operator ? `Operator ${operator}` : null,
+                install ? `Install ${install}` : null,
+                elev ? `Elev ${elev}` : null,
+                lat !== null && lon !== null
+                  ? `LatLon ${lat.toFixed(4)}, ${lon.toFixed(4)}`
+                  : null,
+              ].filter(Boolean);
+
+              const isSelected = r.id === selectedId;
+
+              return (
+                <li
+                  key={r.id}
+                  onClick={handleRowClick}
+                  style={{
+                    margin: "12px 0",
+                    cursor: "pointer",
+                    ...(isSelected
+                      ? { backgroundColor: "rgba(33, 150, 243, 0.15)", borderLeft: "3px solid #2196f3", paddingLeft: 17 }
+                      : {}),
+                  }}
+                >
+                  <div style={{ fontSize: 16 }}>
+                    <b>{site}</b>{" "}
+                    <span style={{ opacity: 0.85 }}>
+                      {country ? `(${country})` : ""} {source ? `/ ${source}` : ""}
+                    </span>
+                  </div>
+
+                  {specParts.length > 0 && (
+                    <div style={{ marginTop: 4, fontSize: 13, opacity: 0.9 }}>
+                      {specParts.join(" / ")}
+                    </div>
+                  )}
+
+                  {infoParts.length > 0 && (
+                    <div style={{ marginTop: 4, fontSize: 13, opacity: 0.8 }}>
+                      {infoParts.join(" / ")}
+                    </div>
+                  )}
+
+                  <div style={{ marginTop: 6, display: "flex", gap: 12 }}>
+                    {detailsUrl && (
+                      <a href={detailsUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+                        details
+                      </a>
+                    )}
+                    {sourceUrl && (
+                      <a href={sourceUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+                        source
+                      </a>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+
+        {/* RIGHT */}
+        <div style={{ position: "sticky", top: 12, alignSelf: "start" }}>
+          <div
+            style={{
+              height: 700,
+              borderRadius: 8,
+              overflow: "hidden",
+              border: "1px solid #444",
+            }}
+          >
+            <MapContainer
+              center={[35.6812, 139.7671]}
+              zoom={5}
+              style={{ height: "100%", width: "100%" }}
+            >
+              <TileLayer
+                attribution="&copy; OpenStreetMap contributors"
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+
+              <FitBounds points={mapPoints} />
+              <MapRefSetter mapRef={mapRef} />
+
+              <MarkerClusterGroup chunkedLoading>
+                {mapPoints.map((p) => (
+                  <Marker key={p.id} position={[p.lat, p.lon]}>
+                    <Popup>
+                      <div><b>{p.site}</b></div>
+                      <div>{p.country} {p.band ? `/ ${p.band}` : ""}</div>
+                      <div>{p.lat.toFixed(4)}, {p.lon.toFixed(4)}</div>
+                    </Popup>
+                  </Marker>
+                ))}
+              </MarkerClusterGroup>
+            </MapContainer>
+          </div>
+
+          <div style={{ marginTop: 8, fontSize: 12, opacity: 0.75 }}>
+            Map shows only records with lat/lon (WRD mostly).
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
