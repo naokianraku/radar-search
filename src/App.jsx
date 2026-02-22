@@ -33,10 +33,8 @@ function normalizeBand(band) {
     .toUpperCase()
     .replace(/[- ]/g, "");
   if (!s) return "";
-  if (s.startsWith("KU")) return "Ku";
-  if (s.startsWith("KA")) return "Ka";
   const c = s[0];
-  if (["C", "X", "S", "L"].includes(c)) return c;
+  if (["S", "C", "X"].includes(c)) return c;
   return "";
 }
 
@@ -183,7 +181,11 @@ export default function App() {
       .filter(Boolean);
   }, [filteredResults]);
 
-  const BAND_OPTIONS = ["C", "X", "S", "L", "Ku", "Ka"];
+  const BAND_OPTIONS = [
+    { value: "S", label: "S-band" },
+    { value: "C", label: "C-band" },
+    { value: "X", label: "X-band" },
+  ];
 
   return (
     <div style={{ padding: 20, maxWidth: 1200, margin: "0 auto" }}>
@@ -221,21 +223,21 @@ export default function App() {
               <span>All</span>
             </label>
             {BAND_OPTIONS.map((b) => (
-              <label key={b} style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+              <label key={b.value} style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
                 <input
                   type="checkbox"
-                  checked={selectedBands.has(b)}
+                  checked={selectedBands.has(b.value)}
                   onChange={(e) => {
                     setSelectedBands((prev) => {
                       const next = new Set(prev);
-                      if (e.target.checked) next.add(b);
-                      else next.delete(b);
+                      if (e.target.checked) next.add(b.value);
+                      else next.delete(b.value);
                       return next;
                     });
                   }}
                   onClick={(e) => e.stopPropagation()}
                 />
-                <span>{b}</span>
+                <span>{b.label}</span>
               </label>
             ))}
           </div>
