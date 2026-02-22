@@ -38,6 +38,16 @@ function normalizeBand(band) {
   return "";
 }
 
+function normalizeStatus(status) {
+  const s = String(status ?? "").trim().toLowerCase();
+  if (!s) return "";
+  if (s.includes("operational")) return "Operational";
+  if (s.includes("planned")) return "Planned";
+  if (s.includes("construction")) return "Under Construction";
+  if (s.includes("decommission")) return "Decommissioned";
+  return "";
+}
+
 // Leaflet marker icon fix (Vite/ESM)
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -82,6 +92,7 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedBands, setSelectedBands] = useState(new Set());
+  const [selectedStatuses, setSelectedStatuses] = useState(new Set());
   const [selectedId, setSelectedId] = useState(null);
   const mapRef = useRef(null);
 
@@ -152,10 +163,17 @@ export default function App() {
     return [...intersection].map((i) => data[i]);
   }, [searchQuery, index, data]);
 
-  const filteredResults = useMemo(() => {
+  const bandFilteredResults = useMemo(() => {
     if (selectedBands.size === 0) return results;
     return results.filter((r) => selectedBands.has(normalizeBand(r.band)));
   }, [results, selectedBands]);
+
+  const filteredResults = useMemo(() => {
+    if (selectedStatuses.size === 0) return bandFilteredResults;
+    return bandFilteredResults.filter((r) =>
+      selectedStatuses.has(normalizeStatus(r.status))
+    );
+  }, [bandFilteredResults, selectedStatuses]);
 
   const mapPoints = useMemo(() => {
     return filteredResults
@@ -185,6 +203,13 @@ export default function App() {
     { value: "S", label: "S-band" },
     { value: "C", label: "C-band" },
     { value: "X", label: "X-band" },
+  ];
+
+  const STATUS_OPTIONS = [
+    "Operational",
+    "Planned",
+    "Under Construction",
+    "Decommissioned",
   ];
 
   return (
@@ -238,6 +263,36 @@ export default function App() {
                   onClick={(e) => e.stopPropagation()}
                 />
                 <span>{b.label}</span>
+              </label>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 13, marginRight: 4 }}>Status:</span>
+            <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={selectedStatuses.size === 0}
+                onChange={() => setSelectedStatuses(new Set())}
+              />
+              <span>All</span>
+            </label>
+            {STATUS_OPTIONS.map((statusVal) => (
+              <label key={statusVal} style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={selectedStatuses.has(statusVal)}
+                  onChange={(e) => {
+                    setSelectedStatuses((prev) => {
+                      const next = new Set(prev);
+                      if (e.target.checked) next.add(statusVal);
+                      else next.delete(statusVal);
+                      return next;
+                    });
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <span>{statusVal}</span>
               </label>
             ))}
           </div>
