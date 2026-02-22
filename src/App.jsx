@@ -48,6 +48,19 @@ function normalizeStatus(status) {
   return "";
 }
 
+function normalizeCountry(r) {
+  const raw =
+    (r.country_iso3 && r.country_iso3 !== "" ? r.country_iso3 : null) ??
+    r.country_name ??
+    r.country?.alpha3 ??
+    r.country?.name ??
+    "";
+  const s = String(raw).trim();
+  if (!s) return "";
+  if (s.length === 3 && /^[A-Za-z]{3}$/.test(s)) return s.toUpperCase();
+  return s;
+}
+
 // Leaflet marker icon fix (Vite/ESM)
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -93,6 +106,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedBands, setSelectedBands] = useState(new Set());
   const [selectedStatuses, setSelectedStatuses] = useState(new Set());
+  const [selectedCountry, setSelectedCountry] = useState("");
   const [selectedId, setSelectedId] = useState(null);
   const mapRef = useRef(null);
 
@@ -168,12 +182,32 @@ export default function App() {
     return results.filter((r) => selectedBands.has(normalizeBand(r.band)));
   }, [results, selectedBands]);
 
-  const filteredResults = useMemo(() => {
+  const statusFilteredResults = useMemo(() => {
     if (selectedStatuses.size === 0) return bandFilteredResults;
     return bandFilteredResults.filter((r) =>
       selectedStatuses.has(normalizeStatus(r.status))
     );
   }, [bandFilteredResults, selectedStatuses]);
+
+  const filteredResults = useMemo(() => {
+    if (!selectedCountry) return statusFilteredResults;
+    return statusFilteredResults.filter(
+      (r) => normalizeCountry(r) === selectedCountry
+    );
+  }, [statusFilteredResults, selectedCountry]);
+
+  const countriesAvailable = useMemo(() => {
+    const set = new Set();
+    data.forEach((r) => {
+      const c = normalizeCountry(r);
+      if (c) set.add(c);
+    });
+    const arr = [...set].sort((a, b) => a.localeCompare(b));
+    if (typeof window !== "undefined") {
+      console.log("countriesAvailable.length", arr.length);
+    }
+    return arr;
+  }, [data]);
 
   const mapPoints = useMemo(() => {
     return filteredResults
@@ -295,6 +329,23 @@ export default function App() {
                 <span>{statusVal}</span>
               </label>
             ))}
+          </div>
+
+          <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 13 }}>Country:</span>
+            <select
+              value={selectedCountry}
+              onChange={(e) => setSelectedCountry(e.target.value)}
+              style={{ padding: "4px 8px", fontSize: 13, minWidth: 120 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <option value="">All</option>
+              {countriesAvailable.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div style={{ marginTop: 10 }}>Hits: {filteredResults.length}</div>
