@@ -40,12 +40,24 @@ function normalizeBand(band) {
 
 function normalizeStatus(status) {
   const s = String(status ?? "").trim().toLowerCase();
-  if (!s) return "";
-  if (s.includes("operational")) return "Operational";
+
+  if (!s || s === "unknown") return "Unknown";
+
+  if (
+    s.includes("operational") ||
+    s.includes("partly operational") ||
+    s.includes("stand-by") ||
+    s.includes("pre-operational")
+  ) return "Active";
+
   if (s.includes("planned")) return "Planned";
-  if (s.includes("construction")) return "Under Construction";
-  if (s.includes("decommission")) return "Decommissioned";
-  return "";
+
+  if (
+    s.includes("closed") ||
+    s.includes("non-reporting")
+  ) return "Inactive";
+
+  return "Unknown";
 }
 
 function normalizeCountry(r) {
@@ -240,10 +252,10 @@ export default function App() {
   ];
 
   const STATUS_OPTIONS = [
-    "Operational",
-    "Planned",
-    "Under Construction",
-    "Decommissioned",
+  "Active",
+  "Planned",
+  "Inactive",
+  "Unknown",
   ];
 
   return (
