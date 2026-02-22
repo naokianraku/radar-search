@@ -268,7 +268,13 @@ export default function App() {
               }
             }}
             placeholder="例: japan C D"
-            style={{ width: "100%", padding: 10, fontSize: 16 }}
+            style={{
+              width: "100%",
+              maxWidth: 420,
+              padding: 8,
+              fontSize: 14,
+              marginBottom: 10,
+            }}
           />
 
           <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
