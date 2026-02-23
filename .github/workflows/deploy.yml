@@ -27,8 +27,8 @@ jobs:
           node-version: 24
           cache: npm
 
-      - run: npm ci
-      - run: npm run build
+- run: npm ci
+- run: npm run build -- --mode github
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
