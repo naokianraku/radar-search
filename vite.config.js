@@ -1,8 +1,12 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
-// https://vite.dev/config/
-export default defineConfig({
-  plugins: [react()],
-  base: "/radar-search/",
-})
+export default defineConfig(({ mode }) => {
+  // mode: "github" のときだけ GitHub Pages 用の base を使う
+  const base = mode === "github" ? "/radar-search/" : "/";
+
+  return {
+    plugins: [react()],
+    base,
+  };
+});
