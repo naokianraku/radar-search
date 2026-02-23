@@ -124,7 +124,7 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      const res = await fetch("/radars_v2.json");
+      const res = await fetch(`${import.meta.env.BASE_URL}radars_v2.json`);
       const records = await res.json();
       setData(records);
 
